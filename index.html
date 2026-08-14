@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Connect 4 to win!</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
         body {
             font-family: 'Comic Sans MS', 'Chalkboard SE', 'Comic Neue', sans-serif; /* Child-friendly font */
@@ -43,17 +44,17 @@
             display: inline-block;
         }
 
-        /* The blue plastic front */
+        /* The plastic front */
         .board-front {
             position: absolute;
             top: 10px;
             left: 10px;
             right: 10px;
             bottom: 10px;
-            background-color: #2563eb;
+            background-color: #eab308;
             border-radius: 1rem;
             box-shadow: 0 10px 25px rgba(0,0,0,0.2), inset 0 5px 10px rgba(255,255,255,0.2);
-            border: 4px solid #1d4ed8;
+            border: 4px solid #ca8a04;
             pointer-events: none; /* Let clicks pass through to columns */
             z-index: 10;
             display: flex;
@@ -82,7 +83,7 @@
             box-shadow: inset 0 4px 6px rgba(0,0,0,0.4);
             /* This makes the background color transparent so chips show through */
             background-color: transparent;
-            box-shadow: 0 0 0 1000px #2563eb, inset 0 4px 6px rgba(0,0,0,0.3); /* Clever CSS trick to make holes */
+            box-shadow: 0 0 0 1000px #eab308, inset 0 4px 6px rgba(0,0,0,0.3); /* Clever CSS trick to make holes */
             overflow: hidden; /* Needed for the trick if we used border, but we use box-shadow */
         }
         
@@ -90,12 +91,12 @@
         .board-mask {
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
-            background-color: #2563eb;
+            background-color: #eab308;
             z-index: 10;
             pointer-events: none;
             border-radius: 1rem;
             box-shadow: 0 10px 25px rgba(0,0,0,0.2), inset 0 5px 10px rgba(255,255,255,0.2);
-            border: 4px solid #1d4ed8;
+            border: 4px solid #ca8a04;
             /* Using CSS mask to punch holes */
             -webkit-mask-image: radial-gradient(circle at 50% 50%, transparent 24px, black 25px);
             mask-image: radial-gradient(circle at 50% 50%, transparent 24px, black 25px);
@@ -215,12 +216,12 @@
         }
 
         .board-container {
-            /* Simulating the blue plastic board look */
-            background-color: #2563eb; /* Tailwind blue-600 */
+            /* Simulating the plastic board look */
+            background-color: #eab308; /* Tailwind yellow-500 */
             border-radius: 1rem;
             padding: 10px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.2), inset 0 5px 10px rgba(255,255,255,0.2);
-            border: 4px solid #1d4ed8; /* Darker blue border */
+            border: 4px solid #ca8a04; /* Darker yellow border */
         }
 
         .cell {
@@ -619,10 +620,39 @@
             winnerText.className = `text-3xl font-bold mb-4 ${colorClass}`;
             winnerIcon.style.background = gradient;
             
+            playVictoryMusic();
+
             setTimeout(() => {
                 showModal();
                 createConfetti();
             }, 600); // Slight delay to let user see the winning connection
+        }
+
+        function playVictoryMusic() {
+            // Ensure Tone is started
+            Tone.start();
+
+            // Create a synth
+            const synth = new Tone.PolySynth(Tone.Synth, {
+                oscillator: {
+                    type: "triangle"
+                },
+                envelope: {
+                    attack: 0.05,
+                    decay: 0.1,
+                    sustain: 0.3,
+                    release: 1
+                }
+            }).toDestination();
+
+            // A triumphant victory melody
+            const now = Tone.now();
+            
+            // "Ta-da-da-DAAA!"
+            synth.triggerAttackRelease(["C4", "E4", "G4"], "8n", now);
+            synth.triggerAttackRelease(["C4", "E4", "G4"], "8n", now + 0.15);
+            synth.triggerAttackRelease(["C4", "E4", "G4"], "8n", now + 0.3);
+            synth.triggerAttackRelease(["E4", "G4", "C5"], "2n", now + 0.5);
         }
 
         function handleDraw() {
