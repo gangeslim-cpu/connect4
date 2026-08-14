@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connect 4 to win!</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Comic Sans MS', 'Chalkboard SE', 'Comic Neue', sans-serif; /* Child-friendly font */
+            background-color: #f0fdf4; /* Light green background */
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .game-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            width: 100%;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .side-counters {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 20px;
+            background: #ffffff;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            min-width: 150px;
+        }
+
+        .board-container {
+            position: relative;
+            background-color: transparent;
+            padding: 10px;
+            display: inline-block;
+        }
+
+        /* The blue plastic front */
+        .board-front {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            bottom: 10px;
+            background-color: #2563eb;
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2), inset 0 5px 10px rgba(255,255,255,0.2);
+            border: 4px solid #1d4ed8;
+            pointer-events: none; /* Let clicks pass through to columns */
+            z-index: 10;
+            display: flex;
+        }
+
+        /* Background for the chips to fall against */
+        .board-back {
+            display: flex;
+            background-color: transparent;
+            border-radius: 1rem;
+            position: relative;
+            z-index: 5;
+        }
+
+        .column-holes {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .hole {
+            width: 50px;
+            height: 50px;
+            background-color: #f0fdf4; /* Match body to look transparent */
+            border-radius: 50%;
+            margin: 5px;
+            box-shadow: inset 0 4px 6px rgba(0,0,0,0.4);
+            /* This makes the background color transparent so chips show through */
+            background-color: transparent;
+            box-shadow: 0 0 0 1000px #2563eb, inset 0 4px 6px rgba(0,0,0,0.3); /* Clever CSS trick to make holes */
+            overflow: hidden; /* Needed for the trick if we used border, but we use box-shadow */
+        }
+        
+        /* Revised hole trick to work better */
+        .board-mask {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #2563eb;
+            z-index: 10;
+            pointer-events: none;
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2), inset 0 5px 10px rgba(255,255,255,0.2);
+            border: 4px solid #1d4ed8;
+            /* Using CSS mask to punch holes */
+            -webkit-mask-image: radial-gradient(circle at 50% 50%, transparent 24px, black 25px);
+            mask-image: radial-gradient(circle at 50% 50%, transparent 24px, black 25px);
+            -webkit-mask-size: 60px 60px;
+            mask-size: 60px 60px;
+            -webkit-mask-repeat: repeat;
+            mask-repeat: repeat;
+            -webkit-mask-position: 10px 10px;
+            mask-position: 10px 10px;
+        }
+
+
+        .cell {
+            width: 50px;
+            height: 50px;
+            margin: 5px;
+            position: relative;
+        }
+
+        @media (min-width: 640px) {
+            .cell {
+                width: 60px;
+                height: 60px;
+                margin: 8px;
+            }
+            .board-mask {
+                -webkit-mask-image: radial-gradient(circle at 50% 50%, transparent 29px, black 30px);
+                mask-image: radial-gradient(circle at 50% 50%, transparent 29px, black 30px);
+                -webkit-mask-size: 76px 76px;
+                mask-size: 76px 76px;
+            }
+        }
+
+        @media (min-width: 768px) {
+            .cell {
+                width: 70px;
+                height: 70px;
+                margin: 10px;
+            }
+            .board-mask {
+                -webkit-mask-image: radial-gradient(circle at 50% 50%, transparent 34px, black 35px);
+                mask-image: radial-gradient(circle at 50% 50%, transparent 34px, black 35px);
+                -webkit-mask-size: 90px 90px;
+                mask-size: 90px 90px;
+            }
+        }
+
+        .chip {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            position: absolute;
+            left: 0;
+            opacity: 0;
+            box-shadow: inset -5px -5px 10px rgba(0,0,0,0.3), inset 5px 5px 10px rgba(255,255,255,0.4), 0 2px 4px rgba(0,0,0,0.4);
+        }
+
+        .chip.drop {
+            opacity: 1;
+            /* Start from above the board */
+            top: -400px; 
+            animation: dropAnim 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+
+        @keyframes dropAnim {
+            0% { transform: translateY(0); }
+            60% { transform: translateY(calc(400px + var(--drop-target))); }
+            80% { transform: translateY(calc(400px + var(--drop-target) - 20px)); }
+            100% { transform: translateY(calc(400px + var(--drop-target))); }
+        }
+
+        .red-chip {
+            background: radial-gradient(circle at 30% 30%, #fca5a5, #ef4444, #b91c1c); /* 3D red */
+        }
+
+        .blue-chip {
+            background: radial-gradient(circle at 30% 30%, #93c5fd, #3b82f6, #1d4ed8); /* 3D blue */
+        }
+        
+        .side-chip {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 10px;
+            vertical-align: middle;
+            box-shadow: inset -3px -3px 6px rgba(0,0,0,0.3), inset 3px 3px 6px rgba(255,255,255,0.4);
+        }
+
+        .col-wrapper {
+            position: relative;
+            z-index: 5;
+            cursor: pointer;
+        }
+
+        /* Hover effect for columns */
+        .col-wrapper:hover::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(255, 255, 255, 0.15);
+            border-radius: 50px;
+            z-index: 20;
+            pointer-events: none;
+        }
+
+        /* Highlight winning chips */
+        .winning-cell .chip {
+            animation: pulseWin 1s infinite alternate;
+            box-shadow: 0 0 20px 10px #fbbf24; /* Yellow glow */
+            z-index: 15; /* Bring above mask if possible, or just glow brightly */
+        }
+
+        @keyframes pulseWin {
+            0% { filter: brightness(1); }
+            100% { filter: brightness(1.5); }
+        }
+
+        .board-container {
+            /* Simulating the blue plastic board look */
+            background-color: #2563eb; /* Tailwind blue-600 */
+            border-radius: 1rem;
+            padding: 10px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2), inset 0 5px 10px rgba(255,255,255,0.2);
+            border: 4px solid #1d4ed8; /* Darker blue border */
+        }
+
+        .cell {
+            width: 50px;
+            height: 50px;
+            background-color: #f0fdf4; /* Match body background to look like holes */
+            border-radius: 50%;
+            margin: 5px;
+            cursor: pointer;
+            position: relative;
+            box-shadow: inset 0 4px 6px rgba(0,0,0,0.3); /* Inner shadow for depth */
+            transition: background-color 0.3s ease;
+        }
+
+        @media (min-width: 640px) {
+            .cell {
+                width: 60px;
+                height: 60px;
+                margin: 8px;
+            }
+        }
+
+        @media (min-width: 768px) {
+            .cell {
+                width: 70px;
+                height: 70px;
+                margin: 10px;
+            }
+        }
+
+        /* The chips */
+        .chip {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform: scale(0);
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Bouncy drop effect */
+            box-shadow: inset -5px -5px 10px rgba(0,0,0,0.3), inset 5px 5px 10px rgba(255,255,255,0.4), 0 2px 4px rgba(0,0,0,0.4);
+        }
+
+        .cell.red .chip {
+            background: radial-gradient(circle at 30% 30%, #fca5a5, #ef4444, #b91c1c); /* 3D red */
+            transform: scale(0.95);
+        }
+
+        .cell.blue .chip {
+            background: radial-gradient(circle at 30% 30%, #93c5fd, #3b82f6, #1d4ed8); /* 3D blue */
+            transform: scale(0.95);
+        }
+
+        /* Hover effect for columns */
+        .col-hover:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 50px;
+        }
+
+        /* Highlight winning chips */
+        .winning-cell {
+            animation: pulse 1s infinite alternate;
+            box-shadow: 0 0 15px 5px #fbbf24; /* Yellow glow */
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); filter: brightness(1); }
+            100% { transform: scale(1.1); filter: brightness(1.3); }
+        }
+
+        /* Celebration Animation Container */
+        #celebration {
+            pointer-events: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 50;
+            display: none;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <main class="flex-grow flex flex-col items-center justify-start p-4 pt-8">
+        
+        <header class="text-center mb-4 z-20 relative">
+            <h1 class="text-4xl md:text-5xl font-bold text-blue-800 drop-shadow-md mb-2">Connect 4</h1>
+            <div class="flex items-center justify-center gap-4 bg-white p-3 rounded-full shadow-md border-2 border-green-200">
+                <div id="turn-indicator" class="w-8 h-8 rounded-full shadow-inner transition-colors duration-300" style="background: radial-gradient(circle at 30% 30%, #fca5a5, #ef4444, #b91c1c);"></div>
+                <p class="text-lg md:text-xl text-green-700 font-semibold m-0" id="status-message">Player 1 (Red)'s Turn</p>
+            </div>
+        </header>
+
+        <div class="game-wrapper flex-col md:flex-row mt-4">
+            
+            <!-- Left Side Counters (Red) -->
+            <div class="side-counters hidden md:flex">
+                <h3 class="text-center font-bold text-red-600 mb-2 border-b-2 border-red-200 pb-1">Red Player</h3>
+                <div class="flex items-center text-sm"><div class="side-chip red-chip"></div> Counters Left</div>
+                <div class="text-3xl font-black text-center text-red-700" id="red-count">21</div>
+            </div>
+
+            <div class="relative board-container">
+                <!-- We will use a different approach for the holes to allow chips to fall behind -->
+                <div class="board-back flex" id="board">
+                    <!-- Columns will be injected here by JS -->
+                </div>
+                <!-- The blue mask with holes punched out -->
+                <div class="board-mask" id="board-mask"></div>
+            </div>
+
+            <!-- Right Side Counters (Blue) -->
+            <div class="side-counters hidden md:flex">
+                <h3 class="text-center font-bold text-blue-600 mb-2 border-b-2 border-blue-200 pb-1">Blue Player</h3>
+                <div class="flex items-center text-sm"><div class="side-chip blue-chip"></div> Counters Left</div>
+                <div class="text-3xl font-black text-center text-blue-700" id="blue-count">21</div>
+            </div>
+
+        </div>
+        
+        <!-- Mobile counters (visible only on small screens) -->
+        <div class="flex md:hidden gap-4 mt-4 w-full justify-center">
+             <div class="bg-white p-2 rounded-lg shadow border-l-4 border-red-500 flex items-center gap-2">
+                 <div class="side-chip red-chip m-0 w-6 h-6"></div><span class="font-bold text-xl" id="mobile-red-count">21</span>
+             </div>
+             <div class="bg-white p-2 rounded-lg shadow border-l-4 border-blue-500 flex items-center gap-2">
+                 <div class="side-chip blue-chip m-0 w-6 h-6"></div><span class="font-bold text-xl" id="mobile-blue-count">21</span>
+             </div>
+        </div>
+
+        <div class="mt-6 flex gap-4 z-20">
+            <button id="reset-btn" class="px-6 py-3 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-bold rounded-full shadow-lg transform transition hover:scale-105 active:scale-95 text-lg border-2 border-yellow-600">
+                Play Again!
+            </button>
+        </div>
+
+        <!-- Custom Alert Modal (replaces browser alert) -->
+        <div id="game-over-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-40 backdrop-blur-sm transition-opacity duration-300 opacity-0">
+            <div class="bg-white p-8 rounded-3xl shadow-2xl text-center max-w-sm w-full transform scale-90 transition-transform duration-300" id="modal-content">
+                <h2 id="winner-text" class="text-3xl font-bold mb-4"></h2>
+                <div id="winner-icon" class="w-20 h-20 mx-auto rounded-full mb-6 shadow-lg"></div>
+                <button id="modal-close-btn" class="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-full shadow-md w-full text-lg">
+                    Awesome!
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <footer class="w-full text-center p-4 bg-green-100 text-green-800 text-sm font-medium border-t-2 border-green-200 mt-auto">
+        Designed by Ganges Lim Version 14 August 2026 (html 5 offline simulation)
+    </footer>
+
+    <div id="celebration"></div>
+
+    <script>
+        const ROWS = 6;
+        const COLS = 7;
+        let board = [];
+        let currentPlayer = 1; // 1 for Red, 2 for Blue
+        let gameActive = true;
+        let redChipsLeft = 21;
+        let blueChipsLeft = 21;
+
+        const boardElement = document.getElementById('board');
+        const boardMask = document.getElementById('board-mask');
+        const statusMessage = document.getElementById('status-message');
+        const resetBtn = document.getElementById('reset-btn');
+        const turnIndicator = document.getElementById('turn-indicator');
+        
+        // Counter elements
+        const redCountEl = document.getElementById('red-count');
+        const blueCountEl = document.getElementById('blue-count');
+        const mobileRedCountEl = document.getElementById('mobile-red-count');
+        const mobileBlueCountEl = document.getElementById('mobile-blue-count');
+        
+        // Modal elements
+        const modal = document.getElementById('game-over-modal');
+        const modalContent = document.getElementById('modal-content');
+        const winnerText = document.getElementById('winner-text');
+        const winnerIcon = document.getElementById('winner-icon');
+        const modalCloseBtn = document.getElementById('modal-close-btn');
+
+        function initGame() {
+            board = [];
+            boardElement.innerHTML = '';
+            currentPlayer = 1;
+            gameActive = true;
+            redChipsLeft = 21;
+            blueChipsLeft = 21;
+            updateCounters();
+            updateStatusMessage();
+            updateTurnIndicator();
+
+            // Create columns
+            for (let c = 0; c < COLS; c++) {
+                const colData = [];
+                const colElement = document.createElement('div');
+                colElement.className = 'flex flex-col col-wrapper';
+                colElement.dataset.col = c;
+                
+                // Event listener for dropping a chip
+                colElement.addEventListener('click', () => handleColumnClick(c));
+
+                // Create cells within the column
+                for (let r = 0; r < ROWS; r++) {
+                    colData.push(0); // 0 means empty
+                    
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.id = `cell-${r}-${c}`;
+                    colElement.appendChild(cell);
+                }
+                
+                board.push(colData);
+                boardElement.appendChild(colElement);
+            }
+            
+            // Adjust mask styling dynamically based on cell size to ensure holes align perfectly
+            setTimeout(adjustMask, 100);
+            window.addEventListener('resize', adjustMask);
+        }
+        
+        function adjustMask() {
+            if(!boardElement.children[0]) return;
+            const firstCell = boardElement.children[0].children[0];
+            const size = firstCell.offsetWidth;
+            const margin = parseInt(window.getComputedStyle(firstCell).marginTop);
+            
+            // The total space a cell takes up is size + margin * 2
+            const cellTotalSpace = size + (margin * 2);
+            const maskRadius = (size / 2) - 2; // Slightly smaller hole
+            
+            // Dynamic mask properties to match layout exactly
+            boardMask.style.webkitMaskImage = `radial-gradient(circle at 50% 50%, transparent ${maskRadius}px, black ${maskRadius+1}px)`;
+            boardMask.style.maskImage = `radial-gradient(circle at 50% 50%, transparent ${maskRadius}px, black ${maskRadius+1}px)`;
+            boardMask.style.webkitMaskSize = `${cellTotalSpace}px ${cellTotalSpace}px`;
+            boardMask.style.maskSize = `${cellTotalSpace}px ${cellTotalSpace}px`;
+            
+            // Offset for padding of container
+            const padding = 10; 
+            boardMask.style.webkitMaskPosition = `${padding}px ${padding}px`;
+            boardMask.style.maskPosition = `${padding}px ${padding}px`;
+        }
+
+        function updateCounters() {
+            redCountEl.textContent = redChipsLeft;
+            blueCountEl.textContent = blueChipsLeft;
+            mobileRedCountEl.textContent = redChipsLeft;
+            mobileBlueCountEl.textContent = blueChipsLeft;
+        }
+
+        function handleColumnClick(col) {
+            if (!gameActive) return;
+
+            // Check if player has chips
+            if ((currentPlayer === 1 && redChipsLeft === 0) || (currentPlayer === 2 && blueChipsLeft === 0)) {
+                return;
+            }
+
+            // Find the lowest empty row in this column
+            let emptyRow = -1;
+            // Iterate from bottom to top
+            for (let r = ROWS - 1; r >= 0; r--) {
+                if (board[col][r] === 0) {
+                    emptyRow = r;
+                    break;
+                }
+            }
+
+            if (emptyRow !== -1) {
+                // Prevent clicking while animation happens (simple debounce)
+                gameActive = false;
+                
+                // Update logical board
+                board[col][emptyRow] = currentPlayer;
+                
+                // Update counters
+                if (currentPlayer === 1) redChipsLeft--;
+                else blueChipsLeft--;
+                updateCounters();
+                
+                // Create and animate chip
+                const cell = document.getElementById(`cell-${emptyRow}-${col}`);
+                const chip = document.createElement('div');
+                chip.className = `chip drop ${currentPlayer === 1 ? 'red-chip' : 'blue-chip'}`;
+                
+                // Calculate drop distance based on row
+                // Top row needs to fall less, bottom row needs to fall more
+                // We set top: -400px in CSS, so the target is just 0 relative to the cell
+                chip.style.setProperty('--drop-target', '0px');
+                
+                cell.appendChild(chip);
+
+                // Wait for animation to finish before allowing next move or declaring win
+                setTimeout(() => {
+                    // Check for win or draw
+                    const winningCells = checkWin(emptyRow, col);
+                    if (winningCells) {
+                        handleWin(winningCells);
+                    } else if (checkDraw()) {
+                        handleDraw();
+                    } else {
+                        // Switch turn
+                        currentPlayer = currentPlayer === 1 ? 2 : 1;
+                        updateStatusMessage();
+                        updateTurnIndicator();
+                        gameActive = true; // Re-enable interaction
+                    }
+                }, 600); // Matches CSS animation duration
+                
+            } else {
+                // Column is full
+                const colEl = boardElement.children[col];
+                colEl.classList.add('animate-bounce');
+                setTimeout(() => colEl.classList.remove('animate-bounce'), 500);
+            }
+        }
+
+        function checkWin(r, c) {
+            const player = board[c][r];
+            
+            // Helper function to check a direction
+            function checkDirection(dr, dc) {
+                let count = 1;
+                let cells = [[r, c]];
+
+                // Check positive direction
+                let nr = r + dr;
+                let nc = c + dc;
+                while (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nc][nr] === player) {
+                    count++;
+                    cells.push([nr, nc]);
+                    nr += dr;
+                    nc += dc;
+                }
+
+                // Check negative direction
+                nr = r - dr;
+                nc = c - dc;
+                while (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nc][nr] === player) {
+                    count++;
+                    cells.push([nr, nc]);
+                    nr -= dr;
+                    nc -= dc;
+                }
+
+                return count >= 4 ? cells : null;
+            }
+
+            // Check all 4 directions (Horizontal, Vertical, Diagonal 1, Diagonal 2)
+            const directions = [
+                [0, 1],  // Horizontal
+                [1, 0],  // Vertical
+                [1, 1],  // Diagonal /
+                [1, -1]  // Diagonal \
+            ];
+
+            for (let [dr, dc] of directions) {
+                const winCells = checkDirection(dr, dc);
+                if (winCells) return winCells;
+            }
+
+            return null;
+        }
+
+        function checkDraw() {
+            // If the top row of all columns is filled, it's a draw
+            for (let c = 0; c < COLS; c++) {
+                if (board[c][0] === 0) return false;
+            }
+            return true;
+        }
+
+        function handleWin(winningCells) {
+            gameActive = false;
+            
+            // We apply the class to the cell, which will affect the chip inside it via CSS
+            winningCells.forEach(([r, c]) => {
+                const cell = document.getElementById(`cell-${r}-${c}`);
+                cell.classList.add('winning-cell');
+            });
+
+            const colorName = currentPlayer === 1 ? 'Red' : 'Blue';
+            const colorClass = currentPlayer === 1 ? 'text-red-600' : 'text-blue-600';
+            const gradient = currentPlayer === 1 
+                ? 'radial-gradient(circle at 30% 30%, #fca5a5, #ef4444, #b91c1c)' 
+                : 'radial-gradient(circle at 30% 30%, #93c5fd, #3b82f6, #1d4ed8)';
+
+            statusMessage.innerHTML = `<span class="${colorClass} font-extrabold text-2xl">${colorName} Wins!</span>`;
+            turnIndicator.style.display = 'none';
+
+            // Setup and show modal
+            winnerText.textContent = `YAY! ${colorName} Player Wins!`;
+            winnerText.className = `text-3xl font-bold mb-4 ${colorClass}`;
+            winnerIcon.style.background = gradient;
+            
+            setTimeout(() => {
+                showModal();
+                createConfetti();
+            }, 600); // Slight delay to let user see the winning connection
+        }
+
+        function handleDraw() {
+            gameActive = false;
+            statusMessage.textContent = "It's a Draw! Good game.";
+            turnIndicator.style.display = 'none';
+            
+            winnerText.textContent = "It's a Tie!";
+            winnerText.className = "text-3xl font-bold mb-4 text-gray-700";
+            winnerIcon.style.background = "linear-gradient(135deg, #fca5a5 50%, #93c5fd 50%)"; // Half red, half blue
+            
+            setTimeout(showModal, 600);
+        }
+
+        function updateStatusMessage() {
+            if (currentPlayer === 1) {
+                statusMessage.innerHTML = 'Player 1 <span class="text-red-600 font-bold">(Red)</span>\'s Turn';
+            } else {
+                statusMessage.innerHTML = 'Player 2 <span class="text-blue-600 font-bold">(Blue)</span>\'s Turn';
+            }
+        }
+
+        function updateTurnIndicator() {
+            turnIndicator.style.display = 'block';
+            if (currentPlayer === 1) {
+                turnIndicator.style.background = 'radial-gradient(circle at 30% 30%, #fca5a5, #ef4444, #b91c1c)';
+            } else {
+                turnIndicator.style.background = 'radial-gradient(circle at 30% 30%, #93c5fd, #3b82f6, #1d4ed8)';
+            }
+        }
+
+        // Modal Controls
+        function showModal() {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            // Trigger reflow for transition
+            void modal.offsetWidth; 
+            modal.classList.remove('opacity-0');
+            modalContent.classList.remove('scale-90');
+            modalContent.classList.add('scale-100');
+        }
+
+        function hideModal() {
+            modal.classList.add('opacity-0');
+            modalContent.classList.remove('scale-100');
+            modalContent.classList.add('scale-90');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }, 300); // Match transition duration
+        }
+
+        function createConfetti() {
+            const container = document.getElementById('celebration');
+            container.style.display = 'block';
+            container.innerHTML = ''; // Clear previous
+
+            const colors = ['#ef4444', '#3b82f6', '#f59e0b', '#10b981', '#8b5cf6'];
+            
+            for (let i = 0; i < 100; i++) {
+                const confetti = document.createElement('div');
+                confetti.style.position = 'absolute';
+                confetti.style.width = '10px';
+                confetti.style.height = '10px';
+                confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                confetti.style.left = Math.random() * 100 + 'vw';
+                confetti.style.top = '-10px';
+                confetti.style.borderRadius = Math.random() > 0.5 ? '50%' : '0'; // Mix of circles and squares
+                
+                // Randomize animation
+                const animationDuration = Math.random() * 3 + 2 + 's';
+                const animationDelay = Math.random() * 2 + 's';
+                const horizontalMovement = (Math.random() - 0.5) * 200 + 'px';
+                
+                confetti.animate([
+                    { transform: `translate3d(0,0,0) rotate(0deg)`, opacity: 1 },
+                    { transform: `translate3d(${horizontalMovement}, 100vh, 0) rotate(${Math.random()*720}deg)`, opacity: 0 }
+                ], {
+                    duration: parseFloat(animationDuration) * 1000,
+                    delay: parseFloat(animationDelay) * 1000,
+                    easing: 'cubic-bezier(.37,0,.63,1)',
+                    fill: 'forwards'
+                });
+
+                container.appendChild(confetti);
+            }
+
+            // Cleanup after animation finishes
+            setTimeout(() => {
+                container.style.display = 'none';
+                container.innerHTML = '';
+            }, 5000);
+        }
+
+        resetBtn.addEventListener('click', initGame);
+        modalCloseBtn.addEventListener('click', () => {
+            hideModal();
+            initGame();
+        });
+
+        // Initialize the game on load
+        initGame();
+
+    </script>
+</body>
+</html>
